@@ -1,20 +1,29 @@
--- https://love2d.org/wiki/Config_Files
+local IS_DEBUG = os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") == "1" and arg[2] == "debug"
+if IS_DEBUG then
+	require("lldebugger").start()
+
+	function love.errorhandler(msg)
+		error(msg, 2)
+	end
+end
+
 function love.conf(t)
 	t.identity              = nil
 	t.appendidentity        = false
-	t.version               = "11.4"
+	t.version               = "12.0"
 	t.console               = false
 	t.accelerometerjoystick = false
 	t.externalstorage       = false
 	t.gammacorrect          = false
+	t.highdpi               = false
 
 	t.audio.mic             = false
 	t.audio.mixwithsystem   = true
 
 	t.window.title          = "Untitled"
 	t.window.icon           = nil
-	t.window.width          = 800
-	t.window.height         = 600
+	t.window.width          = 640
+	t.window.height         = 480
 	t.window.borderless     = false
 	t.window.resizable      = false
 	t.window.minwidth       = 1
@@ -25,8 +34,7 @@ function love.conf(t)
 	t.window.msaa           = 0
 	t.window.depth          = nil
 	t.window.stencil        = nil
-	t.window.display        = 1
-	t.window.highdpi        = false
+	t.window.displayindex   = 1
 	t.window.usedpiscale    = true
 	t.window.x              = nil
 	t.window.y              = nil
