@@ -17,7 +17,7 @@ function guy:new(x, y)
     self.position = vec2(x, y)
     self.sprite = peachy.new("assets/guy.json", guyImage, "Walk")
     self.speed = love.math.random(20, 60)
-    self.health = 3
+    self.health = 1
 end
 
 function guy:draw()
