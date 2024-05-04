@@ -23,6 +23,7 @@ end
 
 local noiseSource = love.audio.newSource("assets/noise.wav", "stream")
 local walkingSource = love.audio.newSource("assets/walk.wav", "static")
+love.graphics.setFont(love.graphics.newFont("assets/PressStart2P-vaV7.ttf", 16))
 
 function game:initialize()
 	self.music = love.audio.newSource("assets/music.wav", "stream")
@@ -32,7 +33,7 @@ function game:initialize()
 
 	self.guys = {}
 	self.deaths = 0
-	self.maxTimeLimit = 120
+	self.maxTimeLimit = 60
 	self.timeLimit = self.maxTimeLimit
 
 	self.guySpawningTimer = 0
@@ -46,8 +47,13 @@ function game:initialize()
 
 	self.windDirection = -1
 
+	self.deathSource = love.audio.newSource("assets/death.wav", "static")
+
+	pubsub:new()
+
 	pubsub:subscribe("guyDied", function(guy)
 		self.deaths = self.deaths + 1
+		self.deathSource:play()
 	end)
 
 	self.umbrella = {
@@ -89,19 +95,33 @@ function game:initialize()
 end
 
 local doors = {
-	{ x = 172, y = 161, w = 20, h = 1030},
-	{ x = 275, y = 161, w = 20, h = 1030},
-	{ x = 378, y = 161, w = 20, h = 1030},
-	{ x = 485, y = 161, w = 20, h = 1030},
+	{ x = 172, y = 281, w = 20, h = 1030},
+	{ x = 275, y = 281, w = 20, h = 1030},
+	{ x = 378, y = 281, w = 20, h = 1030},
+	{ x = 485, y = 281, w = 20, h = 1030},
 }
 
 local safeZones = functional.map(doors, function(door)
 	return {
 		x = door.x - 6,
-		y = door.y - 32,
+		y = door.y - 5,
 		w = door.w + 12
 	}
 end)
+
+table.insert(safeZones, {
+	x = 608,
+	y = 261,
+	w = 32,
+	h = 1030
+})
+
+table.insert(safeZones, {
+	x = 0,
+	y = 261,
+	w = 32,
+	h = 1030
+})
 
 local function aabb(x1, y1, w1, h1, x2, y2, w2, h2)
     return x1 < x2 + w2 and
@@ -126,6 +146,10 @@ function game:addCloud(x)
 end
 
 function game:update(dt)
+	if love.keyboard.isDown("q") then
+		self.timeLimit = 0
+	end
+
 	love.audio.setPosition(self.umbrella.position.x, self.umbrella.position.y, 0)
 	--love.audio.setPosition(love.graphics.getWidth() / 2, love.graphics.getHeight() / 2, 0)
 	self.timeLimit = self.timeLimit - dt
@@ -133,13 +157,19 @@ function game:update(dt)
 	if self.timeLimit <= 0 then
 		_G.currentState = _G.states.gameOver
 		self.music:stop()
+		walkingSource:stop()
+
+		for _, cloud in ipairs(self.clouds) do
+			cloud.source:stop()
+		end
+
 		return
 	end
 
 	if #self.guys > 0 then
 		walkingSource:setPosition(self.umbrella.position.x, self.umbrella.position.y, 0)
 		walkingSource:setLooping(true)
-		walkingSource:setVolume(0.1)
+		walkingSource:setVolume(0.0)
 		walkingSource:play()
 	end
 
@@ -148,10 +178,11 @@ function game:update(dt)
 
 		local safe = true
 		local guyInTheSky = vec2(guy.position.x, guy.position.y - 1000)
+		guy.centeredPosition = vec2(guy.position.x + 16, guy.position.y)
 
 		if self.maxCloudSpawningTimer then
 			for _, cloud in ipairs(self.clouds) do
-				if intersect.line_line_collide(guy.position, guyInTheSky, 0, vec2(cloud.x, cloud.y), vec2(cloud.x + 64, cloud.y), 0) then
+				if intersect.line_line_collide(guy.centeredPosition, guyInTheSky, 0, vec2(cloud.x, cloud.y), vec2(cloud.x + 64, cloud.y), 0) then
 					safe = false
 					break
 				end
@@ -171,7 +202,7 @@ function game:update(dt)
 			end
 		end
 
-		if not safe and intersect.line_line_collide(guy.position, guyInTheSky, 0, vec2(self.umbrella.position.x, self.umbrella.position.y), vec2(self.umbrella.position.x + 64, self.umbrella.position.y), 0) then
+		if not safe and intersect.line_line_collide(guy.centeredPosition, guyInTheSky, 0, vec2(self.umbrella.position.x, self.umbrella.position.y), vec2(self.umbrella.position.x + 64, self.umbrella.position.y), 0) then
 			if aabb(guy.position.x, guy.position.y, 32, 32, self.umbrella.position.x, self.umbrella.position.y + 64, 64, love.graphics.getHeight()) then
 				safe = true
 			end
@@ -260,19 +291,37 @@ function game:rainStencil()
 		love.graphics.rectangle("fill", safeZone.x, safeZone.y, safeZone.w, love.graphics.getHeight())
 	end
 
-	love.graphics.rectangle("fill", self.umbrella.position.x, self.umbrella.position.y + 64, 64, love.graphics.getHeight())
+	love.graphics.rectangle("fill", self.umbrella.position.x, self.umbrella.position.y + 32, 64, love.graphics.getHeight())
 	love.graphics.rectangle("fill", 0, 311, love.graphics.getWidth(), love.graphics.getHeight())
 
 	love.graphics.setColorMask(true, true, true, true)
 end
 
+local background = love.graphics.newImage("assets/background.png")
+local rainColorsImage = love.graphics.newImage("assets/raincolours.png")
+
+local rainColorShader = love.graphics.newShader([[
+	uniform Image rainColors;
+
+	vec4 effect(vec4 color, Image texture, vec2 texture_coords, vec2 screen_coords) {
+		vec4 pixel = Texel(texture, texture_coords);
+
+		if (pixel.a == 0.0) {
+			discard;
+		}
+
+		return Texel(rainColors, screen_coords / love_ScreenSize.xy);
+	}
+]])
+
 function game:draw()
 	love.graphics.setColor(1, 1, 1)
+	love.graphics.draw(background, 0, 0)
 	love.graphics.draw(buildingsImage, 0, 0)
 
 	for _, guy in ipairs(self.guys) do
 		if not guy.safe then
-			love.graphics.setColor(1, 0, 0)
+			love.graphics.setColor(1, 0.5, 0.5)
 		else
 			love.graphics.setColor(1, 1, 1)
 		end
@@ -286,13 +335,14 @@ function game:draw()
 	end
 
 	love.graphics.setColor(1, 1, 1)
+	love.graphics.printf("DEATHS", 0, love.graphics.getHeight() - 130, love.graphics.getWidth(), "center")
 	love.graphics.printf(self.deaths, 0, love.graphics.getHeight() - 100, love.graphics.getWidth(), "center")
 
 	love.graphics.rectangle("fill", 0, 0, (self.timeLimit / self.maxTimeLimit) * love.graphics.getWidth(), 8)
 
 	love.graphics.draw(self.umbrella.sprite, mathx.round(self.umbrella.position.x), mathx.round(self.umbrella.position.y))
-	love.graphics.line(self.umbrella.position.x, self.umbrella.position.y + 36, self.umbrella.position.x, 311)
-	love.graphics.line(self.umbrella.position.x + 64, self.umbrella.position.y + 36, self.umbrella.position.x + 64, 311)
+	--love.graphics.line(self.umbrella.position.x, self.umbrella.position.y + 36, self.umbrella.position.x, 311)
+	--love.graphics.line(self.umbrella.position.x + 64, self.umbrella.position.y + 36, self.umbrella.position.x + 64, 311)
 
 	love.graphics.setStencilMode("increment", "always", 1)
 	self:rainStencil()
@@ -301,11 +351,14 @@ function game:draw()
 	love.graphics.setStencilMode("keep", "equal", 0)
 	love.graphics.setColor(1, 1, 1)
 
+	love.graphics.setShader(rainColorShader)
+	rainColorShader:send("rainColors", rainColorsImage)
+
 	for _, rainDrop in ipairs(self.rainDrops) do
 		rainDrop.sprite:draw(rainDrop.position.x, rainDrop.position.y)
 	end
 
-	--love.graphics.rectangle("fill", 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
+	love.graphics.setShader()
 	love.graphics.setStencilMode()
 end
 

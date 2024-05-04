@@ -20,8 +20,8 @@ function love.conf(t)
 	t.audio.mic             = false
 	t.audio.mixwithsystem   = true
 
-	t.window.title          = "Untitled"
-	t.window.icon           = nil
+	t.window.title          = "acid rain - everyday monotony of the end of the world"
+	t.window.icon           = "assets/icon.png"
 	t.window.width          = 640
 	t.window.height         = 480
 	t.window.borderless     = false
