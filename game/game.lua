@@ -146,10 +146,6 @@ function game:addCloud(x)
 end
 
 function game:update(dt)
-	if love.keyboard.isDown("q") then
-		self.timeLimit = 0
-	end
-
 	love.audio.setPosition(self.umbrella.position.x, self.umbrella.position.y, 0)
 	--love.audio.setPosition(love.graphics.getWidth() / 2, love.graphics.getHeight() / 2, 0)
 	self.timeLimit = self.timeLimit - dt
@@ -187,32 +183,29 @@ function game:update(dt)
 					break
 				end
 			end
-
-			if safe then
-				goto continue
-			end
 		else
 			safe = false
 		end
 
-		for _, v in ipairs(safeZones) do
-			if aabb(guy.position.x, guy.position.y, 32, 32, v.x, v.y, v.w, love.graphics.getHeight()) then
-				safe = true
-				break
-			end
-		end
-
-		if not safe and intersect.line_line_collide(guy.centeredPosition, guyInTheSky, 0, vec2(self.umbrella.position.x, self.umbrella.position.y), vec2(self.umbrella.position.x + 64, self.umbrella.position.y), 0) then
-			if aabb(guy.position.x, guy.position.y, 32, 32, self.umbrella.position.x, self.umbrella.position.y + 64, 64, love.graphics.getHeight()) then
-				safe = true
-			end
-		end
-
 		if not safe then
-			guy.health = guy.health - dt
+			for _, v in ipairs(safeZones) do
+				if aabb(guy.position.x, guy.position.y, 32, 32, v.x, v.y, v.w, love.graphics.getHeight()) then
+					safe = true
+					break
+				end
+			end
+
+			if not safe and intersect.line_line_collide(guy.centeredPosition, guyInTheSky, 0, vec2(self.umbrella.position.x, self.umbrella.position.y), vec2(self.umbrella.position.x + 64, self.umbrella.position.y), 0) then
+				if aabb(guy.position.x, guy.position.y, 32, 32, self.umbrella.position.x, self.umbrella.position.y + 64, 64, love.graphics.getHeight()) then
+					safe = true
+				end
+			end
+
+			if not safe then
+				guy.health = guy.health - dt
+			end
 		end
 
-		::continue::
 		guy.safe = safe
 	end
 
@@ -344,12 +337,26 @@ function game:draw()
 	--love.graphics.line(self.umbrella.position.x, self.umbrella.position.y + 36, self.umbrella.position.x, 311)
 	--love.graphics.line(self.umbrella.position.x + 64, self.umbrella.position.y + 36, self.umbrella.position.x + 64, 311)
 
-	love.graphics.setStencilMode("increment", "always", 1)
-	self:rainStencil()
-	love.graphics.setStencilMode()
+	--love.graphics.setStencilMode("increment", "always", 1)
+	--self:rainStencil()
+	--love.graphics.setStencilMode()
 
-	love.graphics.setStencilMode("keep", "equal", 0)
+	love.graphics.stencil(function()
+		love.graphics.setColorMask(false, false, false, false)
+
+		for _, safeZone in ipairs(safeZones) do
+			love.graphics.rectangle("fill", safeZone.x, safeZone.y, safeZone.w, love.graphics.getHeight())
+		end
+
+		love.graphics.rectangle("fill", self.umbrella.position.x, self.umbrella.position.y + 32, 64, love.graphics.getHeight())
+		love.graphics.rectangle("fill", 0, 311, love.graphics.getWidth(), love.graphics.getHeight())
+
+		love.graphics.setColorMask(true, true, true, true)
+	end, "increment", 1)
+
+	--love.graphics.setStencilMode("keep", "equal", 0)
 	love.graphics.setColor(1, 1, 1)
+	love.graphics.setStencilTest("equal", 0)
 
 	love.graphics.setShader(rainColorShader)
 	rainColorShader:send("rainColors", rainColorsImage)
@@ -359,7 +366,7 @@ function game:draw()
 	end
 
 	love.graphics.setShader()
-	love.graphics.setStencilMode()
+	love.graphics.setStencilTest()
 end
 
 return game
